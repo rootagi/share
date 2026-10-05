@@ -1,0 +1,191 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v0.1.0)"
+        required: false
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: share
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS (Homebrew Apple Silicon & Intel)
+          - target: aarch64-apple-darwin
+            os: macos-14
+            archive: tar.gz
+            can_run: true
+          - target: x86_64-apple-darwin
+            os: macos-14
+            archive: tar.gz
+            can_run: false
+
+          # Linux (glibc & static musl, x86_64 & ARM64)
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            can_run: true
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            can_run: true
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            can_run: false
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            can_run: false
+
+          # Windows (x86_64 & ARM64)
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            can_run: true
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            can_run: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux cross-compilation toolchains
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-musl)
+              sudo apt-get install -y musl-tools
+              ;;
+            aarch64-unknown-linux-gnu)
+              sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+              echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+              ;;
+            aarch64-unknown-linux-musl)
+              sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
+              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+              echo "CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+              ;;
+          esac
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package Unix archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.tag || 'v0.1.0' }}}"
+          STAGE_DIR="dist/${BINARY_NAME}-${VERSION}-${{ matrix.target }}"
+          mkdir -p "${STAGE_DIR}/completions" "${STAGE_DIR}/examples"
+
+          cp "target/${{ matrix.target }}/release/${BINARY_NAME}" "${STAGE_DIR}/"
+          cp README.md LICENSE "${STAGE_DIR}/"
+          cp examples/share.service "${STAGE_DIR}/examples/"
+
+          if [ "${{ matrix.can_run }}" = "true" ]; then
+            BIN="target/${{ matrix.target }}/release/${BINARY_NAME}"
+          else
+            cargo build --release --locked
+            BIN="target/release/${BINARY_NAME}"
+          fi
+          "${BIN}" --completions bash   > "${STAGE_DIR}/completions/share.bash"
+          "${BIN}" --completions zsh    > "${STAGE_DIR}/completions/_share"
+          "${BIN}" --completions fish   > "${STAGE_DIR}/completions/share.fish"
+          "${BIN}" --completions elvish > "${STAGE_DIR}/completions/share.elv"
+
+          ARCHIVE_NAME="${BINARY_NAME}-${VERSION}-${{ matrix.target }}.tar.gz"
+          tar -C dist -czf "dist/${ARCHIVE_NAME}" "${BINARY_NAME}-${VERSION}-${{ matrix.target }}"
+
+          cd dist
+          shasum -a 256 "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha256"
+
+      - name: Package Windows archive (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $Version = if ($env:GITHUB_REF_NAME -and $env:GITHUB_REF_NAME.StartsWith("v")) { $env:GITHUB_REF_NAME } else { "${{ github.event.inputs.tag || 'v0.1.0' }}" }
+          $StageName = "$env:BINARY_NAME-$Version-${{ matrix.target }}"
+          $StageDir = "dist/$StageName"
+          New-Item -ItemType Directory -Force -Path "$StageDir/completions" | Out-Null
+
+          Copy-Item "target/${{ matrix.target }}/release/$env:BINARY_NAME.exe" "$StageDir/"
+          Copy-Item "README.md", "LICENSE" "$StageDir/"
+
+          if ("${{ matrix.can_run }}" -eq "true") {
+            & "target/${{ matrix.target }}/release/$env:BINARY_NAME.exe" --completions powershell > "$StageDir/completions/share.ps1"
+          }
+
+          $ArchiveName = "$StageName.zip"
+          Compress-Archive -Path "$StageDir" -DestinationPath "dist/$ArchiveName"
+
+          $Hash = (Get-FileHash -Algorithm SHA256 "dist/$ArchiveName").Hash.ToLower()
+          "$Hash  $ArchiveName" | Out-File -Encoding ascii -NoNewline "dist/$ArchiveName.sha256"
+          "`n" | Out-File -Encoding ascii -Append -NoNewline "dist/$ArchiveName.sha256"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate consolidated SHA256SUMS
+        run: |
+          cd artifacts
+          cat *.sha256 | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
+            artifacts/SHA256SUMS
