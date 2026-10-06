@@ -309,7 +309,7 @@ pub async fn upload(
         st.metrics
             .begin_transfer(client.0, name.clone(), Direction::Upload, total_expected);
 
-    let (mut tmp, file) = if offset > 0 {
+    let (tmp, file) = if offset > 0 {
         let Some(existing_tmp) = st.partial_uploads.take(&key) else {
             let err = ShareError::BadRequest(format!(
                 "no partial upload found to resume at offset {offset}"
@@ -373,8 +373,41 @@ pub async fn upload(
         (tmp, f)
     };
 
+    struct UploadParkGuard {
+        st: Shared,
+        key: PartialKey,
+        resumable: bool,
+        cancel: tokio_util::sync::CancellationToken,
+        tmp: Option<TempFile>,
+    }
+
+    impl Drop for UploadParkGuard {
+        fn drop(&mut self) {
+            if let Some(tmp) = self.tmp.take() {
+                if self.resumable && !self.cancel.is_cancelled() {
+                    if let Ok(m) = std::fs::metadata(tmp.path()) {
+                        if m.len() > 0 {
+                            self.st.partial_uploads.park(self.key.clone(), tmp);
+                            return;
+                        }
+                    }
+                }
+                drop(tmp);
+            }
+        }
+    }
+
+    let mut park_guard = UploadParkGuard {
+        st: st.clone(),
+        key,
+        resumable,
+        cancel: guard.transfer().cancel.clone(),
+        tmp: Some(tmp),
+    };
+
     match receive(body, file, &guard, content_length, st.throttle.clone()).await {
         Ok(received) => {
+            let mut tmp = park_guard.tmp.take().expect("tmp present");
             let final_size = offset + received;
             match commit(&dir, tmp.path(), &name).await {
                 Ok(final_name) => {
@@ -401,17 +434,14 @@ pub async fn upload(
         }
         Err(Failure::ClientGone(why)) => {
             tracing::debug!("upload of '{name}' interrupted: {why}");
-            if resumable && !guard.transfer().cancel.is_cancelled() {
-                if let Ok(m) = tokio::fs::metadata(tmp.path()).await {
-                    if m.len() > 0 {
-                        st.partial_uploads.park(key, tmp);
-                    }
-                }
-            }
+            drop(park_guard);
             drop(guard); // recorded as aborted
             Err(ShareError::BadRequest(format!("upload interrupted: {why}")))
         }
         Err(Failure::Server(e)) => {
+            // Do not retain partial file on server/IO error.
+            park_guard.resumable = false;
+            drop(park_guard);
             guard.fail(&e.to_string());
             Err(e)
         }
@@ -454,6 +484,12 @@ pub(crate) async fn receive(
             .write_all(&chunk)
             .await
             .map_err(|e| Failure::Server(ShareError::from(e)))?;
+        if received == 0 {
+            writer
+                .flush()
+                .await
+                .map_err(|e| Failure::Server(ShareError::from(e)))?;
+        }
         received += n;
         guard.add(n);
     }

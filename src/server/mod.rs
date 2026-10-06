@@ -52,7 +52,9 @@ pub fn bind(addr: SocketAddr) -> Result<TcpListener> {
         TcpSocket::new_v6()
     }
     .map_err(|e| ShareError::io("creating socket", e))?;
-    // Lets the server restart immediately without waiting for TIME_WAIT sockets.
+    // Lets the server restart immediately on Unix without waiting for TIME_WAIT sockets.
+    // (On Windows, SO_REUSEADDR allows multiple active listeners to steal the same port.)
+    #[cfg(not(windows))]
     socket
         .set_reuseaddr(true)
         .map_err(|e| ShareError::io("configuring socket", e))?;

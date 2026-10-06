@@ -79,7 +79,8 @@ fn section(title: &str, borders: Borders) -> Block<'static> {
 }
 
 fn draw_dashboard(f: &mut Frame, app: &App, inner: Rect) {
-    let info = info_lines(app);
+    let info_w = inner.width.saturating_sub(2) as usize;
+    let info = info_lines(app, info_w);
     let info_h = (info.len() as u16 + 1).min(inner.height / 2);
     let clients_h = app.snapshot.clients.len().clamp(1, 5) as u16 + 1;
     let rows = Layout::vertical([
@@ -111,7 +112,7 @@ fn kv(key: &str) -> Span<'static> {
     Span::styled(format!("{key:<9}"), label())
 }
 
-fn info_lines(app: &App) -> Vec<Line<'static>> {
+fn info_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     let cfg = &app.state.config;
     let mut lines = Vec::new();
 
@@ -129,9 +130,10 @@ fn info_lines(app: &App) -> Vec<Line<'static>> {
     if let Some(rate) = cfg.rate_limit {
         meta.push_str(&format!(" · limit {}/s", format_bytes(rate)));
     }
+    let max_path = width.saturating_sub(9 + meta.chars().count()).max(12);
     lines.push(Line::from(vec![
         kv("Sharing"),
-        Span::styled(cfg.root.display.clone(), bold()),
+        Span::styled(truncate_middle(&cfg.root.display, max_path), bold()),
         Span::styled(meta, dim()),
     ]));
 

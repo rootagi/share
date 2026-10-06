@@ -100,11 +100,11 @@ pub(crate) async fn serve(
         }
     };
 
-    let mut file = File::open(&path).await?;
-    let meta = file.metadata().await?;
+    let meta = tokio::fs::metadata(&path).await?;
     if !meta.is_file() {
         return Err(ShareError::NotFound);
     }
+    let mut file = File::open(&path).await?;
     let size = meta.len();
     let filename = path
         .file_name()
