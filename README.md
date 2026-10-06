@@ -64,6 +64,12 @@ share . --interface wlan0
 - Rust **1.85+** (2024 Edition) and Cargo.
 - No C/GUI libraries, Node.js, Python, or system OpenSSL packages are required at build time or runtime.
 
+### Install using Homebrew tap
+
+``` bash
+brew install rootagi/tap/share
+```
+
 ### Compile from Source
 
 ```bash
