@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>share</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-dir" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></symbol>
+    <symbol id="i-audio" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 8l-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/></symbol>
+    <symbol id="i-document" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V5M7 9l5-5 5 5M5 20h14"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14a8 8 0 1 1-10-10 7 7 0 0 0 10 10z"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  </svg>
+
+  <div class="page">
+    <header class="top">
+      <div class="heading">
+        <h1 id="share-name">share</h1>
+        <nav id="crumbs" class="crumbs" aria-label="Breadcrumb"></nav>
+      </div>
+      <div class="top-side">
+        <span id="chip" class="chip" hidden></span>
+        <button id="theme" class="btn icon" type="button" title="Toggle light/dark" aria-label="Toggle light or dark theme"></button>
+      </div>
+    </header>
+
+    <section class="toolbar" aria-label="Controls">
+      <label class="search">
+        <span class="visually-hidden">Filter files</span>
+        <span id="search-icon"></span>
+        <input id="q" type="search" placeholder="Filter this folder" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="sortbox">
+        <label class="visually-hidden" for="sort">Sort by</label>
+        <select id="sort">
+          <option value="name">Name</option>
+          <option value="size">Size</option>
+          <option value="modified">Modified</option>
+          <option value="type">Type</option>
+        </select>
+        <button id="order" class="btn icon" type="button" title="Reverse sort order" aria-label="Reverse sort order"></button>
+      </div>
+      <label id="rec-wrap" class="check" hidden><input id="rec" type="checkbox"> Include subfolders</label>
+      <div id="root-dl" class="dl-wrap" hidden></div>
+      <button id="upload-btn" class="btn primary" type="button" hidden></button>
+      <input id="file-input" type="file" multiple hidden>
+    </section>
+
+    <div id="summary" class="summary" aria-live="polite"></div>
+    <ul id="list" class="list"></ul>
+    <div id="empty" class="empty" hidden></div>
+    <div id="sentinel" aria-hidden="true"></div>
+
+    <footer class="foot">LAN trust mode: anyone who can reach this server can see what is shared here.</footer>
+  </div>
+
+  <aside id="uploads" class="uploads" hidden aria-label="Uploads">
+    <div class="uploads-head"><strong>Uploads</strong><button id="uploads-clear" class="link" type="button">Clear finished</button></div>
+    <ul id="uploads-list"></ul>
+  </aside>
+  <div id="drop" class="drop" hidden><div>Drop files or folders to upload to <b id="drop-target"></b></div></div>
+  <div id="lightbox" class="lightbox" hidden role="dialog" aria-modal="true" aria-label="Media preview">
+    <div id="lb-backdrop" class="lb-backdrop"></div>
+    <div class="lb-content">
+      <div class="lb-head">
+        <span id="lb-title" class="lb-title"></span>
+        <div class="lb-acts">
+          <span id="lb-pos" class="lb-pos"></span>
+          <a id="lb-dl" class="btn icon" title="Download" aria-label="Download"></a>
+          <button id="lb-close" class="btn icon" type="button" title="Close (Esc)" aria-label="Close"></button>
+        </div>
+      </div>
+      <div id="lb-body" class="lb-body"></div>
+      <button id="lb-prev" class="lb-nav lb-prev" type="button" title="Previous (←)" aria-label="Previous">‹</button>
+      <button id="lb-next" class="lb-nav lb-next" type="button" title="Next (→)" aria-label="Next">›</button>
+    </div>
+  </div>
+  <div id="auth-modal" class="auth-modal" hidden role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <form id="auth-form" class="auth-card">
+      <h2 id="auth-title">Authentication Required</h2>
+      <p id="auth-desc" class="auth-desc">Enter the PIN to access this share.</p>
+      <label id="auth-user-wrap" class="auth-field" hidden>
+        <span>Username</span>
+        <input id="auth-user" type="text" autocomplete="username">
+      </label>
+      <label class="auth-field">
+        <span id="auth-pass-label">PIN / Password</span>
+        <input id="auth-pass" type="password" autocomplete="current-password" required>
+      </label>
+      <div id="auth-err" class="auth-err" hidden></div>
+      <button class="btn primary auth-submit" type="submit">Unlock</button>
+    </form>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <noscript><p class="empty">The file browser needs JavaScript. Direct downloads still work at <code>/download/&lt;path&gt;</code>.</p></noscript>
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>

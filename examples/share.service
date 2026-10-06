@@ -1,0 +1,22 @@
+# Example systemd *user* unit: ~/.config/systemd/user/share.service
+#   systemctl --user daemon-reload && systemctl --user enable --now share
+#
+# --no-tui is implied when there is no terminal; logs go to the journal:
+#   journalctl --user -u share -f
+[Unit]
+Description=share - LAN file sharing
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/share %h/Public --upload-dir %h/Public/inbox --port 8080
+Restart=on-failure
+RestartSec=3
+# Hardening: the service only needs to read/write its shared folder and ~/.config/share (certificate cache).
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=%h/Public %h/.config/share
+
+[Install]
+WantedBy=default.target
