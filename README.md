@@ -4,27 +4,9 @@ Terminal-native HTTP(S) & WebDAV file server and live transfer monitor for local
 
 Point `share` at any directory or file from your shell to expose it immediately over HTTPS or HTTP. The host gets a real-time `ratatui` terminal dashboard (throughput sparklines, active transfer gauges, connected client table, QR overlay, and ring-buffered log viewer), while other machines and phones on the subnet browse, preview in an interactive media lightbox, stream folder archives (`.zip`, `.tar.gz`, `.tar`), download, upload, or mount as a native network drive (`dav://host:port`) using a standard web browser, `curl`, `wget`, or OS file manager.
 
-```text
-╭─ SHARE ─────────────────────────────────────────────────────────── HTTPS ● RUNNING ─╮
-│ Sharing   ~/Releases  folder · uploads on                                           │
-│ URL       ▸ https://192.168.1.15:8080   wlan0 · Wi-Fi                               │
-│             https://10.0.0.42:8080      eth0 · Ethernet                             │
-│ WebDAV      dav://192.168.1.15:8080     Finder / Explorer / GNOME Files             │
-│ TLS       self-signed · SHA-256 8F:3A:19:C2:4B:10:7E:D1…                            │
-│           LAN TRUST MODE  anyone who can reach this server can read the shared files│
-├─ TRANSFERS ─────────────────────────────┬─ NETWORK ─────────────────────────────────┤
-│ ↓ ubuntu-24.04-desktop-amd64.iso        │ ↓  112.4 MB/s                             │
-│ ████████████░░░░░░░░  62%  112.4 MB/s   │ ↑    0.0 B/s                              │
-│ 2.91 GiB / 4.70 GiB   192.168.1.21      │ ▁▂▄▆████████▇▆▇███                        │
-│                                         │ ░░░░░░░░░░░░░░░░░░                        │
-│ RECENT                                  │ Clients   1  (2 conn)                     │
-│ ✓ ↑ notes.pdf          1.42 MiB  28 MB/s│ Peak      ↓ 118.1 MB/s  ↑ 28.4 MB/s       │
-│ ✓ ↓ checksums.txt       412 B    1.2 MB/s│ Sent      2.91 GiB                        │
-├─ CLIENTS ───────────────────────────────┴───────────────────────────────────────────┤
-│ 192.168.1.21     ↓  ubuntu-24.04-desktop-amd64.iso                       112.4 MB/s │
-│ [O] Open  [Y] Copy  [P] QR  [U] Upload:ON  [X] Kill  [R] Refresh  [L] Logs  [Q] Quit│
-╰─────────────────────────────────────────────────────────────────────────────────────╯
-```
+--- 
+
+<img width="1134" height="531" alt="Screenshot From 2026-10-06 06-29-47" src="https://github.com/user-attachments/assets/91028dd0-bf43-4dc8-8be5-753da13b3ee3" />
 
 ---
 
