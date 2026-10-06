@@ -110,7 +110,7 @@ jobs:
           mkdir -p "${STAGE_DIR}/completions" "${STAGE_DIR}/examples"
 
           cp "target/${{ matrix.target }}/release/${BINARY_NAME}" "${STAGE_DIR}/"
-          cp README.md LICENSE "${STAGE_DIR}/"
+          cp README.md LICENSE-MIT LICENSE-APACHE "${STAGE_DIR}/"
           cp examples/share.service "${STAGE_DIR}/examples/"
 
           if [ "${{ matrix.can_run }}" = "true" ]; then
@@ -140,7 +140,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$StageDir/completions" | Out-Null
 
           Copy-Item "target/${{ matrix.target }}/release/$env:BINARY_NAME.exe" "$StageDir/"
-          Copy-Item "README.md", "LICENSE" "$StageDir/"
+          Copy-Item "README.md", "LICENSE-MIT", "LICENSE-APACHE" "$StageDir/"
 
           if ("${{ matrix.can_run }}" -eq "true") {
             & "target/${{ matrix.target }}/release/$env:BINARY_NAME.exe" --completions powershell > "$StageDir/completions/share.ps1"
