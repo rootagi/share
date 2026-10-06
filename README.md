@@ -53,7 +53,8 @@ share . --interface wlan0
 - **Constant-memory streaming & token-bucket rate limiting**: Downloads stream from `tokio::fs::File` in 256 KiB chunks (`ReaderStream`); uploads stream through a 1 MiB `BufWriter`. Optional `--rate-limit <RATE>` paces all active streams smoothly across connections.
 - **Atomic, non-destructive & resumable uploads**: When uploads are enabled (`--upload`, `--upload-dir`, or toggled live via `[U]` in the TUI), raw `POST`/`PUT` bodies to `/api/upload` are staged to a hidden `.part` file in the destination directory and committed via `O_CREAT | O_EXCL` (`create_new`) reservation plus atomic `rename()`. Existing files are never overwritten (`report (1).pdf`, `report (2).pdf`, …). Interrupted uploads with file size/mtime metadata retain their `.part` file so browsers or CLI clients can query `GET /api/upload/status` and resume from the exact byte offset via `POST /api/upload?offset=<N>`.
 - **Zero-dependency RFC 4918 WebDAV server**: Mount the share directly in Linux GNOME Files (`dav://host:port`), macOS Finder (`Cmd+K`), or Windows Explorer (`\\host@port\dav`) with full read/write support (`OPTIONS`, `PROPFIND`, `GET`, `HEAD`, `PUT`, `MKCOL`, `DELETE`, `MOVE`, `COPY`, `LOCK`, `UNLOCK`).
-- **Self-contained single binary**: The web UI (`index.html`, `style.css`, `app.js`, `favicon.svg`) is compiled into the binary via `include_str!` with zero external fonts, scripts, or runtime dependencies.
+- **Self-contained single binary**: The web UI (`index.html`, `style.css`, `app.js`, `favicon.svg`) is compiled into the binary via `include_str!` with zero external fonts or scripts. Linux builds are fully static (musl). Windows builds need the Microsoft Visual C++ Runtime (see [Troubleshooting](#troubleshooting)).
+
 
 ---
 
@@ -62,7 +63,38 @@ share . --interface wlan0
 ### Toolchain Requirements
 
 - Rust **1.85+** (2024 Edition) and Cargo.
-- No C/GUI libraries, Node.js, Python, or system OpenSSL packages are required at build time or runtime.
+- A C toolchain/linker (the `ring` crypto backend compiles a small amount of C and assembly):
+  - Linux: `build-essential` (or your distro's equivalent)
+  - macOS: Xcode Command Line Tools (`xcode-select --install`)
+  - Windows: [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/) with the "Desktop development with C++" workload
+- No GUI libraries, Node.js, Python, or system OpenSSL packages are required at build time or runtime.
+
+
+### Quick install (prebuilt binary)
+
+**Linux / macOS**
+```sh
+curl -fsSL https://raw.githubusercontent.com/rootagi/share/main/install.sh | sh
+```
+
+**Windows (PowerShell)**
+```powershell
+irm https://raw.githubusercontent.com/rootagi/share/main/install.ps1 | iex
+```
+
+The installers download the release for your platform, verify its SHA-256 checksum,
+and install one file into a per-user folder. No Rust is needed.
+
+| Variable | Applies to | Purpose |
+| --- | --- | --- |
+| `SHARE_VERSION` | all | Release tag to install, e.g. `v0.1.0` (default: latest) |
+| `SHARE_INSTALL_DIR` | all | Install folder (default: `~/.local/bin` or `%LOCALAPPDATA%\Programs\share`) |
+| `SHARE_VCREDIST` | Windows | `1` = install the Visual C++ Runtime without asking if missing, `0` = never offer |
+| `NO_COLOR` | all | Plain ASCII output |
+
+> **Windows:** `share.exe` requires the
+> [Microsoft Visual C++ Runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe).
+> The installer detects it and offers to install it (one admin prompt).
 
 ### Install using Homebrew tap
 
@@ -352,3 +384,5 @@ For loopback benchmarks (single-stream 8 GiB sparse transfer, `1/2/5/10` concurr
 | `network interface 'wlan0' was not found or has no usable IPv4 address` | Check active interface names with `ip -br addr`, or bind by IP with `--bind <ADDRESS>`. |
 | Other LAN devices time out connecting | Verify both machines are on the same subnet, Wi-Fi client/AP isolation is off, and your host firewall (`ufw`, `firewalld`, `nftables`) permits TCP on the chosen port. If your IP changed after switching Wi-Fi networks, press `r` in the TUI (or restart `share` to regenerate the TLS certificate SANs). |
 | Browser warns `ERR_CERT_AUTHORITY_INVALID` | Expected on first connection with the auto-generated self-signed certificate. Click **Advanced → Proceed** and optionally match the SHA-256 fingerprint displayed in `share` (`?` in TUI), or run with `--http` if encryption is not needed. |
+| `The code execution cannot proceed because VCRUNTIME140.dll was not found` (Windows) | The Microsoft Visual C++ Runtime is missing, which is common on a fresh Windows install. Install it from <https://aka.ms/vs/17/release/vc_redist.x64.exe> (ARM64: `vc_redist.arm64.exe`), or re-run `install.ps1`, which offers to do it for you. |
+| Windows Firewall prompt on first run, or other devices cannot connect (Windows) | Choose **Private networks** in the prompt. If you dismissed it, allow `share.exe` for private networks in *Windows Defender Firewall → Allow an app*. |
