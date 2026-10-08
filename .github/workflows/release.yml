@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to build (e.g. v0.1.0)"
+        description: "Release tag to build (e.g. v1.0.0)"
         required: false
-        default: "v0.1.0"
+        default: "v1.0.0"
 
 permissions:
   contents: write
@@ -105,7 +105,7 @@ jobs:
         if: matrix.archive == 'tar.gz'
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.tag || 'v0.1.0' }}}"
+          VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.tag || 'v1.0.0' }}}"
           STAGE_DIR="dist/${BINARY_NAME}-${VERSION}-${{ matrix.target }}"
           mkdir -p "${STAGE_DIR}/completions" "${STAGE_DIR}/examples"
 
@@ -134,7 +134,7 @@ jobs:
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
-          $Version = if ($env:GITHUB_REF_NAME -and $env:GITHUB_REF_NAME.StartsWith("v")) { $env:GITHUB_REF_NAME } else { "${{ github.event.inputs.tag || 'v0.1.0' }}" }
+          $Version = if ($env:GITHUB_REF_NAME -and $env:GITHUB_REF_NAME.StartsWith("v")) { $env:GITHUB_REF_NAME } else { "${{ github.event.inputs.tag || 'v1.0.0' }}" }
           $StageName = "$env:BINARY_NAME-$Version-${{ matrix.target }}"
           $StageDir = "dist/$StageName"
           New-Item -ItemType Directory -Force -Path "$StageDir/completions" | Out-Null
