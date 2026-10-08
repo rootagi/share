@@ -173,6 +173,21 @@ pub(crate) async fn serve(
         return builder.body(Body::empty()).map_err(internal);
     }
 
+    // Refuse parallel range sub-requests (e.g. mobile Chrome's 3-stream
+    // `ParallelDownloadJob`) while the same client is already streaming the
+    // full file. Returning 416 causes Chromium to close the extra range workers
+    // and finish the initial full-file stream over a single connection.
+    if start > 0
+        && !wants_inline
+        && has_range_validator(&headers)
+        && st
+            .metrics
+            .registry
+            .has_active_full_download(client.0, &filename)
+    {
+        return Err(ShareError::RangeNotSatisfiable { size });
+    }
+
     if start > 0 {
         file.seek(io::SeekFrom::Start(start)).await?;
     }
@@ -214,6 +229,15 @@ fn inline_content_type(filename: &str, mime: &mime_guess::Mime) -> Option<String
 }
 
 // ---- conditional requests --------------------------------------------------------------
+
+/// Parallel downloaders (such as Chromium's `ParallelDownloadJob` on Android)
+/// attach `If-Match` / `If-Unmodified-Since` or `If-Range` validators from the
+/// initial `200 OK` response when spawning concurrent sub-range slices.
+fn has_range_validator(headers: &HeaderMap) -> bool {
+    headers.contains_key(header::IF_MATCH)
+        || headers.contains_key(header::IF_UNMODIFIED_SINCE)
+        || headers.contains_key(header::IF_RANGE)
+}
 
 /// `If-None-Match` uses weak comparison: strip `W/` and compare opaque tags.
 fn etag_matches(header_value: &str, etag: &str) -> bool {

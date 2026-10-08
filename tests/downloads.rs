@@ -656,3 +656,75 @@ async fn operator_can_kill_active_download_transfer() {
     .await;
     s.stop().await;
 }
+
+#[tokio::test]
+async fn parallel_range_subrequests_from_same_client_are_refused_while_full_download_is_active() {
+    // Pace the stream so the initial full-file request stays active while the
+    // parallel sub-requests (as sent by mobile Chrome's ParallelDownloadJob) arrive.
+    let s = TestServer::start(&["--rate-limit", "4M"]).await;
+    let c = client();
+
+    let r1 = c.get(s.url("/download/big.bin")).send().await.unwrap();
+    assert_eq!(r1.status(), StatusCode::OK);
+    let etag = r1.headers()["etag"].to_str().unwrap().to_string();
+    let modified = r1.headers()["last-modified"].to_str().unwrap().to_string();
+
+    s.eventually("initial full download is active", |m| m.active.len() == 1)
+        .await;
+
+    // Sub-request 2: Chromium's ParallelDownloadJob sends Range + If-Match + If-Unmodified-Since.
+    let r2 = c
+        .get(s.url("/download/big.bin"))
+        .header("Range", format!("bytes={}-", BIG_LEN / 3))
+        .header("If-Match", &etag)
+        .header("If-Unmodified-Since", &modified)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r2.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+    assert_eq!(
+        r2.headers()["content-range"].to_str().unwrap(),
+        format!("bytes */{BIG_LEN}")
+    );
+
+    // Sub-request 3: parallel range slice using If-Range.
+    let r3 = c
+        .get(s.url("/download/big.bin"))
+        .header("Range", format!("bytes={}-", (BIG_LEN * 2) / 3))
+        .header("If-Range", &etag)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r3.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+
+    // Only the single full download is shown on the dashboard.
+    let snap = s.state.metrics.snapshot();
+    assert_eq!(snap.active.len(), 1);
+    assert_eq!(snap.aborted_transfers, 0);
+    assert_eq!(snap.errors, 0);
+
+    // The initial stream completes the entire file over that single connection.
+    assert_eq!(r1.bytes().await.unwrap().to_vec(), big_bytes());
+    s.eventually("single full download completed cleanly", |m| {
+        m.completed_transfers == 1 && m.aborted_transfers == 0 && m.active.is_empty()
+    })
+    .await;
+    assert_eq!(s.state.metrics.completed_downloads(), 1);
+
+    // Once no full download is active, a normal resume with validators succeeds with 206.
+    let resumed = c
+        .get(s.url("/download/big.bin"))
+        .header("Range", format!("bytes={}-{}", BIG_LEN - 64, BIG_LEN - 1))
+        .header("If-Match", &etag)
+        .header("If-Range", &etag)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resumed.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(
+        resumed.bytes().await.unwrap().to_vec(),
+        expected(BIG_LEN - 64..BIG_LEN)
+    );
+
+    s.stop().await;
+}

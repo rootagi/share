@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
-use std::sync::atomic::{AtomicU8, AtomicU64, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering::Relaxed};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
@@ -65,6 +65,7 @@ pub struct Transfer {
     pub started: Instant,
     /// Per-transfer cancellation token (fired by the TUI `x` action).
     pub cancel: CancellationToken,
+    full_download: AtomicBool,
     transferred: AtomicU64,
     /// Bytes counted at the previous sampler tick.
     last_sampled: AtomicU64,
@@ -86,6 +87,7 @@ impl Transfer {
             total,
             started: Instant::now(),
             cancel: CancellationToken::new(),
+            full_download: AtomicBool::new(direction == Direction::Download),
             transferred: AtomicU64::new(0),
             last_sampled: AtomicU64::new(0),
             speed: AtomicU64::new(0),
@@ -292,6 +294,21 @@ impl TransferRegistry {
         t.cancel.cancel();
         Some(t.filename.clone())
     }
+
+    /// Whether `client` already has an active full-file download of `filename`.
+    pub fn has_active_full_download(&self, client: IpAddr, filename: &str) -> bool {
+        self.active
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .any(|t| {
+                t.direction == Direction::Download
+                    && t.client == client
+                    && t.filename == filename
+                    && t.full_download.load(Relaxed)
+                    && !t.cancel.is_cancelled()
+            })
+    }
 }
 
 /// Ownership token for a running transfer.
@@ -319,6 +336,9 @@ impl TransferGuard {
     /// Control whether completing this transfer increments the `--max-downloads` counter.
     pub fn with_quota(mut self, counts_toward_quota: bool) -> Self {
         self.counts_toward_quota = counts_toward_quota;
+        self.transfer
+            .full_download
+            .store(counts_toward_quota, Relaxed);
         self
     }
 
